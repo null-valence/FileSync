@@ -1,30 +1,41 @@
 #include <iostream>
 #include <vector>
+#include <unordered_map>
 #include <filesystem>
 
 using namespace std;
 namespace fs = filesystem;
 
 struct FileInfo {
-    fs::path path;
+    fs::path relative_path;
     uintmax_t size;
     fs::file_time_type last_modified;
 };
 
-vector<FileInfo> scan_directory(const fs::path& root) {
-    vector<FileInfo> files;
+struct Snapshot {
+    unordered_map<string, FileInfo> files;
+};
+
+Snapshot scan_directory(const fs::path& root) {
+    Snapshot snapshot;
 
     for (const auto& entry : fs::recursive_directory_iterator(root)) {
         if(entry.is_regular_file()) {
-            files.push_back({
-                fs::relative(entry.path(), root),
-                entry.file_size(),
-                entry.last_write_time()
-            });
+            fs:: path relative_path = 
+                fs::relative(entry.path(), root);
+            
+            snapshot.files.emplace(
+                relative_path.string(),
+                FileInfo{
+                    fs::relative(entry.path(), root),
+                    entry.file_size(),
+                    entry.last_write_time()
+                }
+            );
         }
     }
 
-    return files;
+    return snapshot;
 }
 
 int main(int argc, char* argv[]) {
@@ -36,11 +47,11 @@ int main(int argc, char* argv[]) {
     try {
         fs::path root = argv[1];
     
-        auto files = scan_directory(root);
+        auto snapshot = scan_directory(root);
     
-        for(const auto& file : files) {
-            cout << file.path << " | "
-                     << file.size << " bytes\n";
+        for(const auto& file : snapshot.files) {
+            cout << file.second.relative_path << " | "
+                     << file.second.size << " bytes\n";
         }
     }
     catch (const fs::filesystem_error& e) {
