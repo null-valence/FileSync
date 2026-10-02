@@ -16,6 +16,53 @@ struct Snapshot {
     unordered_map<string, FileInfo> files;
 };
 
+enum class ActionType {
+    Copy,
+    Delete,
+    Update
+};
+
+struct SyncAction {
+    ActionType type;
+    fs::path relative_path;
+};
+
+vector<SyncAction> compare_snapshots(const Snapshot& snapshotA, const Snapshot& snapshotB) {
+    vector<SyncAction> comparison_result;
+    for(const auto& file1 : snapshotA.files) {
+        auto file2 = snapshotB.files.find(file1.first);
+        if(file2 == snapshotB.files.end()) {
+            comparison_result.push_back({
+                ActionType::Copy,
+                file1.second.relative_path
+            });
+        }
+        else {
+            bool different = 
+                file1.second.size != file2->second.size || 
+                file1.second.last_modified != file2->second.last_modified;
+            
+            if(different) {
+                comparison_result.push_back({
+                    ActionType::Update,
+                    file1.second.relative_path
+                });
+            }
+        }
+    }
+
+    for(const auto& file1 : snapshotB.files) {
+        auto file2 = snapshotA.files.find(file1.first);
+        if(file2 == snapshotA.files.end()) {
+            comparison_result.push_back({
+                ActionType::Delete,
+                file1.second.relative_path
+            });
+        }
+    }
+    return comparison_result;
+}
+
 Snapshot scan_directory(const fs::path& root) {
     Snapshot snapshot;
 
@@ -39,19 +86,34 @@ Snapshot scan_directory(const fs::path& root) {
 }
 
 int main(int argc, char* argv[]) {
-    if (argc != 2) {
-        cerr << "Usage: filesync <directory>\n";
+    if (argc != 3) {
+        cerr << "Usage: filesync <directory> <directory>\n";
         return 1;
     }
 
     try {
-        fs::path root = argv[1];
+        fs::path root1 = argv[1], root2 = argv[2];
     
-        auto snapshot = scan_directory(root);
+        auto snapshotA = scan_directory(root1),
+            snapshotB = scan_directory(root2);
     
-        for(const auto& file : snapshot.files) {
-            cout << file.second.relative_path << " | "
-                     << file.second.size << " bytes\n";
+        vector<SyncAction> comparison_result = compare_snapshots(snapshotA, snapshotB);
+        for(const auto& action : comparison_result) {
+            switch(action.type) {
+                case ActionType::Copy:
+                cout << "Copy";
+                break;
+                
+                case ActionType::Delete:
+                cout << "Delete";
+                break;
+                
+                case ActionType::Update:
+                cout << "Update";
+                break;
+            }
+            cout << ' ' << action.relative_path.string();
+            cout << '\n';
         }
     }
     catch (const fs::filesystem_error& e) {
