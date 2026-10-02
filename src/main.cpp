@@ -27,6 +27,98 @@ struct SyncAction {
     fs::path relative_path;
 };
 
+void print_sync_plan(const vector<SyncAction>& actions) {
+    for(const auto& action : actions) {
+        switch(action.type) {
+            case ActionType::Copy:
+                cout << "Copy";
+                break;
+            
+            case ActionType::Delete:
+                cout << "Delete";
+                break;
+            
+            case ActionType::Update:
+                cout << "Update";
+                break;
+        }
+        cout << ' ' << action.relative_path;
+        cout << '\n';
+    }
+}
+
+bool copy_file_to_destination(const fs::path& source, const fs::path& destination) {
+    try {
+        fs::create_directories(destination.parent_path());
+        fs::copy_file(source, destination);
+        fs::last_write_time(
+            destination,
+            fs::last_write_time(source)
+        );
+        return true;
+    }
+    catch (const fs::filesystem_error& e) {
+        cerr << "Filesystem error: " << e.what() << '\n';
+        return false;
+    }
+}
+
+bool delete_file(const fs::path& path) {
+    return fs::remove(path);
+}
+
+bool update_file(const fs::path& source, const fs::path& destination) {
+    try {
+        fs::copy_file(
+            source,
+            destination,
+            fs::copy_options::overwrite_existing
+        );
+        fs::last_write_time(
+            destination,
+            fs::last_write_time(source)
+        );
+        return true;
+    }
+    catch (const fs::filesystem_error& e) {
+        cerr << "Filesystem error: " << e.what() << '\n';
+        return false;
+    }
+}
+
+void execute_sync(const vector<SyncAction>& actions, const fs::path& rootA, const fs::path& rootB) {
+    for(const auto& action : actions) {
+        switch(action.type) {
+            case ActionType::Copy: {
+                fs::path source = rootA / action.relative_path;
+                fs::path destination = rootB / action.relative_path;
+                cout << "Copy:\n\t" << source;
+                cout << "\n\t->\n\t" << destination << '\n';
+                if(copy_file_to_destination(source, destination)) cout << "Copied successfully";
+                else cout << "Failed copying";
+                break;
+            }
+            case ActionType::Delete: {
+                fs::path destination = rootB / action.relative_path;
+                cout << "Delete:\n\t" << destination << '\n';
+                if(delete_file(destination)) cout << "Deleted successfully";
+                else cout << "Failed deleting";
+                break;
+            }
+            case ActionType::Update: {
+                fs::path source = rootA / action.relative_path;
+                fs::path destination = rootB / action.relative_path;
+                cout << "Update:\n\t" << source;
+                cout << "\n\t->\n\t" << destination << '\n';
+                if(update_file(source, destination)) cout << "Updated successfully";
+                else cout << "File was not found";
+                break;
+            }
+        }
+        cout << '\n';
+    }
+}
+
 vector<SyncAction> compare_snapshots(const Snapshot& snapshotA, const Snapshot& snapshotB) {
     vector<SyncAction> comparison_result;
     for(const auto& file1 : snapshotA.files) {
@@ -92,29 +184,14 @@ int main(int argc, char* argv[]) {
     }
 
     try {
-        fs::path root1 = argv[1], root2 = argv[2];
+        fs::path rootA = argv[1], rootB = argv[2];
     
-        auto snapshotA = scan_directory(root1),
-            snapshotB = scan_directory(root2);
+        auto snapshotA = scan_directory(rootA),
+            snapshotB = scan_directory(rootB);
     
-        vector<SyncAction> comparison_result = compare_snapshots(snapshotA, snapshotB);
-        for(const auto& action : comparison_result) {
-            switch(action.type) {
-                case ActionType::Copy:
-                cout << "Copy";
-                break;
-                
-                case ActionType::Delete:
-                cout << "Delete";
-                break;
-                
-                case ActionType::Update:
-                cout << "Update";
-                break;
-            }
-            cout << ' ' << action.relative_path.string();
-            cout << '\n';
-        }
+        auto actions = compare_snapshots(snapshotA, snapshotB);
+        // print_sync_plan(actions);
+        execute_sync(actions, rootA, rootB);
     }
     catch (const fs::filesystem_error& e) {
         cerr << "Filesystem error: " << e.what() << '\n';
