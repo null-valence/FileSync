@@ -1,0 +1,23 @@
+#include "scanner.h"
+
+Snapshot scan_directory(const fs::path& root) {
+    Snapshot snapshot;
+
+    for (const auto& entry : fs::recursive_directory_iterator(root)) {
+        if(entry.is_regular_file()) {
+            fs:: path relative_path = 
+                fs::relative(entry.path(), root);
+            
+            snapshot.files.emplace(
+                relative_path.string(),
+                FileInfo{
+                    fs::relative(entry.path(), root),
+                    entry.file_size(),
+                    entry.last_write_time()
+                }
+            );
+        }
+    }
+
+    return snapshot;
+}
