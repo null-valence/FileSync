@@ -2,7 +2,6 @@
 
 #include <vector>
 #include <filesystem>
-
 #include "scanner.h"
 
 using namespace std;
@@ -19,5 +18,6 @@ struct SyncAction {
     fs::path relative_path;
 };
 
+void print_sync_plan(const vector<SyncAction>& actions);
 void execute_sync(const vector<SyncAction>& actions, const fs::path& rootA, const fs::path& rootB);
-vector<SyncAction> compare_snapshots(const Snapshot& snapshotA, const Snapshot& snapshotB);
+vector<SyncAction> compare_snapshots(const Snapshot& snapshotA, const Snapshot& snapshotB, const fs::path& rootA, const fs::path& rootB);

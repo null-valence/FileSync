@@ -1,4 +1,5 @@
 #include "sync.h"
+#include "hasher.h"
 #include <iostream>
 
 void print_sync_plan(const vector<SyncAction>& actions) {
@@ -93,7 +94,7 @@ void execute_sync(const vector<SyncAction>& actions, const fs::path& rootA, cons
     }
 }
 
-vector<SyncAction> compare_snapshots(const Snapshot& snapshotA, const Snapshot& snapshotB) {
+vector<SyncAction> compare_snapshots(const Snapshot& snapshotA, const Snapshot& snapshotB, const fs::path& rootA, const fs::path& rootB) {
     vector<SyncAction> comparison_result;
     for(const auto& file1 : snapshotA.files) {
         auto file2 = snapshotB.files.find(file1.first);
@@ -104,15 +105,22 @@ vector<SyncAction> compare_snapshots(const Snapshot& snapshotA, const Snapshot& 
             });
         }
         else {
-            bool different = 
-                file1.second.size != file2->second.size || 
-                file1.second.last_modified != file2->second.last_modified;
-            
-            if(different) {
+            if(file1.second.size != file2->second.size) {
                 comparison_result.push_back({
                     ActionType::Update,
                     file1.second.relative_path
                 });
+            }
+            else if(file1.second.last_modified != file2->second.last_modified) {
+                auto file1_hash = hash_file(rootA / file1.second.relative_path);
+                auto file2_hash = hash_file(rootB / file2->second.relative_path);
+
+                if(file1_hash != file2_hash) {
+                    comparison_result.push_back({
+                        ActionType::Update,
+                        file1.second.relative_path
+                    });
+                }
             }
         }
     }

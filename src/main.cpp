@@ -2,6 +2,7 @@
 
 #include "scanner.h"
 #include "sync.h"
+#include "hasher.h"
 
 using namespace std;
 namespace fs = filesystem;
@@ -19,7 +20,7 @@ int main(int argc, char* argv[]) {
         auto snapshotA = scan_directory(rootA),
             snapshotB = scan_directory(rootB);
     
-        auto actions = compare_snapshots(snapshotA, snapshotB);
+        auto actions = compare_snapshots(snapshotA, snapshotB, rootA, rootB);
         // print_sync_plan(actions);
         execute_sync(actions, rootA, rootB);
     }

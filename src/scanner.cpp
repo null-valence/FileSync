@@ -1,4 +1,5 @@
 #include "scanner.h"
+#include "hasher.h"
 
 Snapshot scan_directory(const fs::path& root) {
     Snapshot snapshot;
@@ -13,7 +14,7 @@ Snapshot scan_directory(const fs::path& root) {
                 FileInfo{
                     fs::relative(entry.path(), root),
                     entry.file_size(),
-                    entry.last_write_time()
+                    entry.last_write_time(),
                 }
             );
         }

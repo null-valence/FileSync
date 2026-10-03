@@ -3,6 +3,7 @@
 #include <unordered_map>
 #include <filesystem>
 #include <cstdint>
+#include <string>
 
 using namespace std;
 namespace fs = filesystem;
