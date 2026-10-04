@@ -2,30 +2,45 @@
 
 #include <iostream>
 #include <fstream>
+#include <memory>
+#include <utility>
 #include <openssl/evp.h>
 
 optional<string> hash_file(const fs::path& path) {
     ifstream file(path, ios::binary);
     if(!file.is_open()) {
         cerr << "Failed to open file.\n";
-        return nullptr;
+        return nullopt;
     }
 
-    EVP_MD_CTX* ctx = EVP_MD_CTX_new();
-    EVP_DigestInit_ex(ctx, EVP_sha256(), nullptr);
+    unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)> ctx(
+        EVP_MD_CTX_new(),
+        EVP_MD_CTX_free
+    );
+
+    if(ctx == nullptr) {
+        return nullopt;
+    }
+
+    if(EVP_DigestInit_ex(ctx.get(), EVP_sha256(), nullptr) == 0) {
+        return nullopt;
+    }
     const size_t buffer_size = 4096;
     char buffer[buffer_size];
     
     while(file) {
         file.read(buffer, buffer_size);
         streamsize bytes_read = file.gcount();
-        EVP_DigestUpdate(ctx, buffer, bytes_read);
+        if(EVP_DigestUpdate(ctx.get(), buffer, bytes_read) == 0) {
+            return nullopt;
+        }
     }
 
     unsigned char digest[EVP_MAX_MD_SIZE];
     unsigned int digest_length;
-    EVP_DigestFinal_ex(ctx, digest, &digest_length);
-    EVP_MD_CTX_free(ctx);
+    if(EVP_DigestFinal_ex(ctx.get(), digest, &digest_length) == 0) {
+        return nullopt;
+    }
     
     string result;
     for(unsigned int i = 0; i < digest_length; i++) {
