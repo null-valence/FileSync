@@ -2,100 +2,147 @@
 #include "hasher.h"
 #include <iostream>
 
-void print_sync_plan(const vector<SyncAction>& actions) {
+void print_sync_plan(const std::vector<SyncAction>& actions) {
     for(const auto& action : actions) {
         switch(action.type) {
             case ActionType::Copy:
-                cout << "Copy";
+                std::cout << "Copy";
                 break;
             
             case ActionType::Delete:
-                cout << "Delete";
+                std::cout << "Delete";
                 break;
             
             case ActionType::Update:
-                cout << "Update";
+                std::cout << "Update";
                 break;
         }
-        cout << ' ' << action.relative_path;
-        cout << '\n';
+        std::cout << ' ' << action.relative_path;
+        std::cout << '\n';
     }
 }
 
-bool copy_file_to_destination(const fs::path& source, const fs::path& destination) {
-    try {
-        fs::create_directories(destination.parent_path());
-        fs::copy_file(source, destination);
-        fs::last_write_time(
-            destination,
-            fs::last_write_time(source)
-        );
-        return true;
-    }
-    catch (const fs::filesystem_error& e) {
-        cerr << "Filesystem error: " << e.what() << '\n';
-        return false;
+void print_sync_error(SyncError error) {
+    switch(error) {
+        case SyncError::SourceNotFound:
+            std::cout << "Source file was not found\n";
+            break;
+        
+        case SyncError::DestinationNotFound:
+            std::cout << "Destination was not found\n";
+            break;
+        
+        case SyncError::PermissionDenied:
+            std::cout << "Permission denied";
+            break;
+
+        default:
+            std::cout << "Filesystem error";
+            break;
     }
 }
 
-bool delete_file(const fs::path& path) {
-    return fs::remove(path);
+SyncError classify_error(const std::error_code& ec, PathRole role) {
+    if(ec == std::errc::permission_denied) return SyncError::PermissionDenied;
+    else if(ec == std::errc::no_such_file_or_directory) {
+        if(role == PathRole::Destination) return SyncError::DestinationNotFound;
+        else return SyncError::SourceNotFound;
+    }
+
+    return SyncError::FilesystemError;
 }
 
-bool update_file(const fs::path& source, const fs::path& destination) {
-    try {
-        fs::copy_file(
-            source,
-            destination,
-            fs::copy_options::overwrite_existing
-        );
-        fs::last_write_time(
-            destination,
-            fs::last_write_time(source)
-        );
-        return true;
-    }
-    catch (const fs::filesystem_error& e) {
-        cerr << "Filesystem error: " << e.what() << '\n';
-        return false;
-    }
+std::expected<void, SyncError> copy_file_to_destination(const fs::path& source, const fs::path& destination) {
+    std::error_code ec;
+
+    fs::create_directories(destination.parent_path(), ec);
+    if(ec) return std::unexpected(classify_error(ec, PathRole::Destination));
+    
+    fs::copy_file(source, destination, ec);
+    if(ec) return std::unexpected(classify_error(ec, PathRole::Source));
+
+    auto source_time = fs::last_write_time(source, ec);
+    if(ec) return std::unexpected(classify_error(ec, PathRole::Source));
+
+    fs::last_write_time(destination, source_time, ec);
+    if(ec) return std::unexpected(classify_error(ec, PathRole::Destination));
+
+    return {};
 }
 
-void execute_sync(const vector<SyncAction>& actions, const fs::path& rootA, const fs::path& rootB) {
+std::expected<void, SyncError> delete_file(const fs::path& path) {
+    std::error_code ec;
+    fs::remove(path, ec);
+    if(ec) return std::unexpected(classify_error(ec, PathRole::Destination));
+
+    /*
+    remove(path, ec) returns 0 on failure, 1 on success
+    since failure means, file was already removed after scanning process, but before this removal,
+    this is also a success, so return {} in both cases.
+    */
+    return {};
+}
+
+std::expected<void, SyncError> update_file(const fs::path& source, const fs::path& destination) {
+    std::error_code ec;
+    fs::copy_file(
+        source,
+        destination,
+        fs::copy_options::overwrite_existing,
+        ec
+    );
+    if(ec) return std::unexpected(classify_error(ec, PathRole::Source));
+
+    auto source_time = fs::last_write_time(source, ec);
+    if(ec) return std::unexpected(classify_error(ec, PathRole::Source));
+
+    fs::last_write_time(destination, source_time, ec);
+    if(ec) return std::unexpected(classify_error(ec, PathRole::Destination));
+
+    return {};
+}
+
+void execute_sync(const std::vector<SyncAction>& actions, const fs::path& rootA, const fs::path& rootB) {
     for(const auto& action : actions) {
         switch(action.type) {
             case ActionType::Copy: {
                 fs::path source = rootA / action.relative_path;
                 fs::path destination = rootB / action.relative_path;
-                cout << "Copy:\n\t" << source;
-                cout << "\n\t->\n\t" << destination << '\n';
-                if(copy_file_to_destination(source, destination)) cout << "Copied successfully";
-                else cout << "Failed copying";
+                std::cout << "Copy:\n\t" << source;
+                std::cout << "\n\t->\n\t" << destination << '\n';
+
+                auto result = copy_file_to_destination(source, destination);
+                if(result) std::cout << "Copied successfully";
+                else print_sync_error(result.error());
                 break;
             }
             case ActionType::Delete: {
                 fs::path destination = rootB / action.relative_path;
-                cout << "Delete:\n\t" << destination << '\n';
-                if(delete_file(destination)) cout << "Deleted successfully";
-                else cout << "File was not found";
+                std::cout << "Delete:\n\t" << destination << '\n';
+
+                auto result = delete_file(destination);
+                if(result) std::cout << "Deleted successfully";
+                else print_sync_error(result.error());
                 break;
             }
             case ActionType::Update: {
                 fs::path source = rootA / action.relative_path;
                 fs::path destination = rootB / action.relative_path;
-                cout << "Update:\n\t" << source;
-                cout << "\n\t->\n\t" << destination << '\n';
-                if(update_file(source, destination)) cout << "Updated successfully";
-                else cout << "Failed updating";
+                std::cout << "Update:\n\t" << source;
+                std::cout << "\n\t->\n\t" << destination << '\n';
+
+                auto result = update_file(source, destination);
+                if(result) std::cout << "Updated successfully";
+                else print_sync_error(result.error());
                 break;
             }
         }
-        cout << '\n';
+        std::cout << '\n';
     }
 }
 
-vector<SyncAction> compare_snapshots(const Snapshot& snapshotA, const Snapshot& snapshotB, const fs::path& rootA, const fs::path& rootB) {
-    vector<SyncAction> comparison_result;
+std::vector<SyncAction> compare_snapshots(const Snapshot& snapshotA, const Snapshot& snapshotB, const fs::path& rootA, const fs::path& rootB) {
+    std::vector<SyncAction> comparison_result;
     for(const auto& file1 : snapshotA.files) {
         auto file2 = snapshotB.files.find(file1.first);
         if(file2 == snapshotB.files.end()) {

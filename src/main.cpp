@@ -4,13 +4,12 @@
 #include "sync.h"
 #include "hasher.h"
 
-using namespace std;
-namespace fs = filesystem;
+namespace fs = std::filesystem;
 
 
 int main(int argc, char* argv[]) {
     if (argc != 3) {
-        cerr << "Usage: filesync <directory> <directory>\n";
+        std::cerr << "Usage: filesync <directory> <directory>\n";
         return 1;
     }
 
@@ -21,11 +20,12 @@ int main(int argc, char* argv[]) {
             snapshotB = scan_directory(rootB);
     
         auto actions = compare_snapshots(snapshotA, snapshotB, rootA, rootB);
+
         // print_sync_plan(actions);
         execute_sync(actions, rootA, rootB);
     }
     catch (const fs::filesystem_error& e) {
-        cerr << "Filesystem error: " << e.what() << '\n';
+        std::cerr << "Filesystem error: " << e.what() << '\n';
         return 1;
     }
 

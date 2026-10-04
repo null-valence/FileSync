@@ -4,8 +4,6 @@
 #include <string>
 #include <optional>
 
+namespace fs = std::filesystem;
 
-using namespace std;
-namespace fs = filesystem;
-
-optional<string> hash_file(const fs::path& path);
+std::optional<std::string> hash_file(const fs::path& path);

@@ -5,8 +5,7 @@
 #include <cstdint>
 #include <string>
 
-using namespace std;
-namespace fs = filesystem;
+namespace fs = std::filesystem;
 
 struct FileInfo {
     fs::path relative_path;
@@ -15,7 +14,7 @@ struct FileInfo {
 };
 
 struct Snapshot {
-    unordered_map<string, FileInfo> files;
+    std::unordered_map<std::string, FileInfo> files;
 };
 
 Snapshot scan_directory(const fs::path& root);
