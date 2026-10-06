@@ -1,6 +1,7 @@
+#include <iostream>
+#include <unordered_set>
 #include "sync.h"
 #include "hasher.h"
-#include <iostream>
 
 void print_sync_plan(const std::vector<SyncAction>& actions) {
     for(const auto& action : actions) {
@@ -102,12 +103,34 @@ std::expected<void, SyncError> update_file(const fs::path& source, const fs::pat
     return {};
 }
 
+ChangeStatus file_changed(const FileInfo& current, const FileState& previous, const fs::path& root) {
+    if(current.size == previous.size && current.last_modified == previous.last_modified)
+        return ChangeStatus::Unchanged;
+
+    auto current_hash = hash_file(root / current.relative_path);
+    if(!current_hash) return ChangeStatus::Error;
+
+    if(current_hash != previous.hash) return ChangeStatus::Changed;
+    return ChangeStatus::Unchanged;
+}
+
 void execute_sync(const std::vector<SyncAction>& actions, const fs::path& rootA, const fs::path& rootB) {
+    fs::path source_root;
+    fs::path destination_root;
+    
     for(const auto& action : actions) {
+        if(action.direction == SyncDirection::AtoB) {
+            source_root = rootA;
+            destination_root = rootB;
+        }else {
+            source_root = rootB;
+            destination_root = rootA;
+        }
+
         switch(action.type) {
             case ActionType::Copy: {
-                fs::path source = rootA / action.relative_path;
-                fs::path destination = rootB / action.relative_path;
+                fs::path source = source_root / action.relative_path;
+                fs::path destination = destination_root / action.relative_path;
                 std::cout << "Copy:\n\t" << source;
                 std::cout << "\n\t->\n\t" << destination << '\n';
 
@@ -117,7 +140,7 @@ void execute_sync(const std::vector<SyncAction>& actions, const fs::path& rootA,
                 break;
             }
             case ActionType::Delete: {
-                fs::path destination = rootB / action.relative_path;
+                fs::path destination = destination_root / action.relative_path;
                 std::cout << "Delete:\n\t" << destination << '\n';
 
                 auto result = delete_file(destination);
@@ -126,8 +149,8 @@ void execute_sync(const std::vector<SyncAction>& actions, const fs::path& rootA,
                 break;
             }
             case ActionType::Update: {
-                fs::path source = rootA / action.relative_path;
-                fs::path destination = rootB / action.relative_path;
+                fs::path source = source_root / action.relative_path;
+                fs::path destination = destination_root / action.relative_path;
                 std::cout << "Update:\n\t" << source;
                 std::cout << "\n\t->\n\t" << destination << '\n';
 
@@ -141,6 +164,137 @@ void execute_sync(const std::vector<SyncAction>& actions, const fs::path& rootA,
     }
 }
 
+std::optional<bool> files_equal(const FileInfo& fileA, const FileInfo& fileB, const fs::path& rootA, const fs::path& rootB) {
+    if(fileA.size != fileB.size)
+        return false;
+
+    auto hashA = hash_file(rootA / fileA.relative_path);
+    auto hashB = hash_file(rootB / fileB.relative_path);
+
+    if(!hashA || !hashB)
+        return std::nullopt;
+
+    return *hashA == *hashB;
+}
+
+SyncPlanResult plan_sync(const Snapshot& snapshotA, const Snapshot& snapshotB, const SyncState& state, const fs::path& rootA, const fs::path& rootB) {
+    SyncPlan plan;
+    std::unordered_set<std::string> paths;
+    for(const auto& file : snapshotA.files) {
+        paths.insert(file.first);
+    }
+    for(const auto& file : snapshotB.files) {
+        paths.insert(file.first);
+    }
+    for(const auto& file : state.files) {
+        paths.insert(file.first);
+    }
+
+    for(const auto& path : paths) {
+        auto file_base_it = state.files.find(path);
+        auto fileA_it = snapshotA.files.find(path);
+        auto fileB_it = snapshotB.files.find(path);
+
+        ChangeStatus change_status_A;
+        ChangeStatus change_status_B;
+        bool existsA = false, existsB = false;
+
+        if(file_base_it == state.files.end()) {
+            if(fileA_it != snapshotA.files.end()) {
+                change_status_A = ChangeStatus::Changed;
+                existsA = true;
+            }
+            else
+                change_status_A = ChangeStatus::Unchanged;
+
+            if(fileB_it != snapshotB.files.end()) {
+                change_status_B = ChangeStatus::Changed;
+                existsB = true;
+            }
+            else
+                change_status_B = ChangeStatus::Unchanged;
+        }
+        else {
+            if(fileA_it != snapshotA.files.end()) {
+                change_status_A = file_changed(fileA_it->second, file_base_it->second, rootA);
+                existsA = true;
+            }
+            else
+                change_status_A = ChangeStatus::Changed;
+
+            if(fileB_it != snapshotB.files.end()) {
+                change_status_B = file_changed(fileB_it->second, file_base_it->second, rootB);
+                existsB = true;
+            }
+            else
+                change_status_B = ChangeStatus::Changed;
+        }
+
+        if(change_status_A == ChangeStatus::Changed && change_status_B == ChangeStatus::Unchanged) {
+            ActionType type;
+            fs::path relative_path;
+            if(existsA) {
+                relative_path = fileA_it->second.relative_path;
+                if(existsB) type = ActionType::Update;
+                else type = ActionType::Copy;
+            }else {
+                type = ActionType::Delete;
+                relative_path = fileB_it->second.relative_path;
+            }
+            plan.actions.push_back({
+                type,
+                SyncDirection::AtoB,
+                relative_path
+            });
+        }
+        else if(change_status_A == ChangeStatus::Unchanged && change_status_B == ChangeStatus::Changed) {
+            ActionType type;
+            fs::path relative_path;
+            if(existsB) {
+                relative_path = fileB_it->second.relative_path;
+                if(existsA) type = ActionType::Update;
+                else type = ActionType::Copy;
+            }else {
+                type = ActionType::Delete;
+                relative_path = fileA_it->second.relative_path;
+            }
+            plan.actions.push_back({
+                type,
+                SyncDirection::BtoA,
+                relative_path
+            });
+        }
+        else if(change_status_A == ChangeStatus::Changed && change_status_B == ChangeStatus::Changed) {
+            if(file_base_it != state.files.end()) {
+                if(existsA != existsB) {
+                    if(existsA) plan.conflicts.push_back({
+                        fileA_it->second.relative_path
+                    });
+                    else plan.conflicts.push_back({
+                        fileB_it->second.relative_path
+                    });
+                }
+                else if(existsA && existsB) {
+                    auto equal = files_equal(fileA_it->second, fileB_it->second, rootA, rootB);
+                    if(!equal) return std::unexpected(SyncError::FilesystemError);
+
+                    if(!*equal) plan.conflicts.push_back({
+                        fileB_it->second.relative_path
+                    });
+                }
+            }
+            else {
+                plan.conflicts.push_back({
+                    fileA_it->second.relative_path
+                });
+            }
+        }
+        else if(change_status_A == ChangeStatus::Error || change_status_B == ChangeStatus::Error) return std::unexpected(SyncError::FilesystemError);
+    }
+
+    return plan;
+}
+
 std::vector<SyncAction> compare_snapshots(const Snapshot& snapshotA, const Snapshot& snapshotB, const fs::path& rootA, const fs::path& rootB) {
     std::vector<SyncAction> comparison_result;
     for(const auto& file1 : snapshotA.files) {
@@ -148,6 +302,7 @@ std::vector<SyncAction> compare_snapshots(const Snapshot& snapshotA, const Snaps
         if(file2 == snapshotB.files.end()) {
             comparison_result.push_back({
                 ActionType::Copy,
+                SyncDirection::AtoB,
                 file1.second.relative_path
             });
         }
@@ -155,6 +310,7 @@ std::vector<SyncAction> compare_snapshots(const Snapshot& snapshotA, const Snaps
             if(file1.second.size != file2->second.size) {
                 comparison_result.push_back({
                     ActionType::Update,
+                    SyncDirection::AtoB,
                     file1.second.relative_path
                 });
             }
@@ -165,6 +321,7 @@ std::vector<SyncAction> compare_snapshots(const Snapshot& snapshotA, const Snaps
                 if(file1_hash != file2_hash) {
                     comparison_result.push_back({
                         ActionType::Update,
+                        SyncDirection::AtoB,
                         file1.second.relative_path
                     });
                 }
@@ -177,6 +334,7 @@ std::vector<SyncAction> compare_snapshots(const Snapshot& snapshotA, const Snaps
         if(file2 == snapshotA.files.end()) {
             comparison_result.push_back({
                 ActionType::Delete,
+                SyncDirection::AtoB,
                 file1.second.relative_path
             });
         }
