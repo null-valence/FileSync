@@ -64,4 +64,3 @@ SyncPlanResult plan_sync(
 );
 void print_sync_plan(const std::vector<SyncAction>& actions);
 void execute_sync(const std::vector<SyncAction>& actions, const fs::path& rootA, const fs::path& rootB);
-std::vector<SyncAction> compare_snapshots(const Snapshot& snapshotA, const Snapshot& snapshotB, const fs::path& rootA, const fs::path& rootB);

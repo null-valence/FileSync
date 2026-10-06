@@ -2,7 +2,6 @@
 
 #include "scanner.h"
 #include "sync.h"
-#include "hasher.h"
 
 namespace fs = std::filesystem;
 
@@ -19,10 +18,26 @@ int main(int argc, char* argv[]) {
         auto snapshotA = scan_directory(rootA),
             snapshotB = scan_directory(rootB);
     
-        auto actions = compare_snapshots(snapshotA, snapshotB, rootA, rootB);
+        SyncState state;
+        auto result = plan_sync(snapshotA, snapshotB, state, rootA, rootB);
+        if(!result) {
+            std::cerr << "Failed to create synchronization plan\n";
+            return 1;
+        }
 
-        // print_sync_plan(actions);
-        execute_sync(actions, rootA, rootB);
+        const auto& plan = *result;
+
+        print_sync_plan(plan.actions);
+        if(!plan.conflicts.empty()) {
+            std::cerr << "Conflicts detected:\n";
+
+            for(const auto& conflict : plan.conflicts) {
+                std::cerr << "  " << conflict.relative_path << '\n';
+            }
+
+            return 1;
+        }
+        execute_sync(plan.actions, rootA, rootB);
     }
     catch (const fs::filesystem_error& e) {
         std::cerr << "Filesystem error: " << e.what() << '\n';
