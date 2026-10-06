@@ -474,5 +474,233 @@ TEST(PlanSync, AChangedBChanged) {
     EXPECT_EQ(result->conflicts[0].relative_path, "file.txt");
 }
 
+// Test 11
+TEST(State, SaveAndLoad) {
+    const fs::path root = "/tmp/filesync-test";
+
+    fs::remove_all(root);
+    fs::create_directories(root);
+
+    {
+        std::ofstream(root / "file1.txt") << "NEW1";
+        std::ofstream(root / "file2.txt") << "NEW_2";
+    }
+
+    SyncState state;
+
+    state.files["file1.txt"] = {
+        4,
+        fs::last_write_time(root / "file1.txt"),
+        *hash_file(root / "file1.txt")
+    };
+    state.files["file2.txt"] = {
+        5,
+        fs::last_write_time(root / "file2.txt"),
+        *hash_file(root / "file2.txt")
+    };
+
+    auto result1 = save_state(
+        root / "state.txt",
+        state
+    );
+
+    ASSERT_TRUE(result1.has_value());
+
+    auto result2 = load_state(
+        root / "state.txt"
+    );
+    
+    ASSERT_TRUE(result2.has_value());
+
+    const auto& loaded_state = *result2;
+    ASSERT_EQ(state.files.size(), loaded_state.files.size());
+
+    for (const auto& [path, file] : state.files) {
+        auto it = loaded_state.files.find(path);
+
+        ASSERT_NE(it, loaded_state.files.end());
+
+        EXPECT_EQ(it->second.size, file.size);
+        EXPECT_EQ(it->second.last_modified, file.last_modified);
+        EXPECT_EQ(it->second.hash, file.hash);
+    }
+}
+
+// Test 12
+TEST(State, SaveAndLoad_Corrupt) {
+    const fs::path root = "/tmp/filesync-test";
+
+    fs::remove_all(root);
+    fs::create_directories(root);
+
+    {
+        std::ofstream(root / "state.txt") << "1\nfile.txt\nnot-a-number\n123456\nabcdef";
+    }
+    
+    auto result = load_state(root / "state.txt");
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(result.error(), "Invalid state file data");
+}
+
+// Test 13
+TEST(State, SaveAndLoad_Malform) {
+    const fs::path root = "/tmp/filesync-test";
+
+    fs::remove_all(root);
+    fs::create_directories(root);
+
+    {
+        std::ofstream(root / "state.txt") << "1\nfile.txt\n4";
+    }
+    
+    auto result = load_state(root / "state.txt");
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(result.error(), "Corrupted state file");
+}
+
+// Test 14
+TEST(Execute, Copy) {
+    const fs::path rootA = "/tmp/filesync-test-A";
+    const fs::path rootB = "/tmp/filesync-test-B";
+
+    fs::remove_all(rootA);
+    fs::remove_all(rootB);
+
+    fs::create_directories(rootA);
+    fs::create_directories(rootB);
+
+    {
+        std::ofstream(rootA / "file.txt") << "NEW";
+    }
+    std::vector<SyncAction> actions;
+    actions.push_back({
+        ActionType::Copy,
+        SyncDirection::AtoB,
+        "file.txt"
+    });
+    
+    auto result = execute_sync(actions, rootA, rootB);
+
+    ASSERT_TRUE(result.has_value());
+    ASSERT_TRUE(fs::exists(rootB / "file.txt"));
+
+    std::ifstream in(rootB / "file.txt");
+    std::string content;
+    std::getline(in, content);
+
+    ASSERT_EQ(content, "NEW");
+}
+
+// Test 15
+TEST(Execute, Copy_Fail) {
+    const fs::path rootA = "/tmp/filesync-test-A";
+    const fs::path rootB = "/tmp/filesync-test-B";
+
+    fs::remove_all(rootA);
+    fs::remove_all(rootB);
+
+    fs::create_directories(rootA);
+    fs::create_directories(rootB);
+
+    std::vector<SyncAction> actions;
+    actions.push_back({
+        ActionType::Copy,
+        SyncDirection::AtoB,
+        "file.txt"
+    });
+    
+    auto result = execute_sync(actions, rootA, rootB);
+
+    ASSERT_FALSE(result.has_value());
+    ASSERT_EQ(result.error(), SyncError::SourceNotFound);
+}
+
+// Test 16
+TEST(Execute, Delete) {
+    const fs::path rootA = "/tmp/filesync-test-A";
+    const fs::path rootB = "/tmp/filesync-test-B";
+
+    fs::remove_all(rootA);
+    fs::remove_all(rootB);
+
+    fs::create_directories(rootA);
+    fs::create_directories(rootB);
+
+    {
+        std::ofstream(rootB / "file.txt") << "NEW";
+    }
+    std::vector<SyncAction> actions;
+    actions.push_back({
+        ActionType::Delete,
+        SyncDirection::AtoB,
+        "file.txt"
+    });
+    
+    auto result = execute_sync(actions, rootA, rootB);
+
+    ASSERT_TRUE(result.has_value());
+    ASSERT_FALSE(fs::exists(rootB / "file.txt"));
+}
+
+// Test 17
+TEST(Execute, Update) {
+    const fs::path rootA = "/tmp/filesync-test-A";
+    const fs::path rootB = "/tmp/filesync-test-B";
+
+    fs::remove_all(rootA);
+    fs::remove_all(rootB);
+
+    fs::create_directories(rootA);
+    fs::create_directories(rootB);
+
+    {
+        std::ofstream(rootA / "file.txt") << "NEW";
+        std::ofstream(rootB / "file.txt") << "OLD";
+    }
+    std::vector<SyncAction> actions;
+    actions.push_back({
+        ActionType::Update,
+        SyncDirection::AtoB,
+        "file.txt"
+    });
+    
+    auto result = execute_sync(actions, rootA, rootB);
+
+    ASSERT_TRUE(result.has_value());
+    ASSERT_TRUE(fs::exists(rootB / "file.txt"));
+
+    std::ifstream in(rootB / "file.txt");
+    std::string content;
+    std::getline(in, content);
+
+    ASSERT_EQ(content, "NEW");
+}
+
+// Test 18
+TEST(State, BuildState) {
+    const fs::path root = "/tmp/filesync-test";
+
+    fs::remove_all(root);
+    fs::create_directories(root);
+
+    {
+        std::ofstream(root / "file.txt") << "NEW";
+    }
+
+    auto snapshot = scan_directory(root);
+
+    auto result = build_state(snapshot, root);
+
+    ASSERT_TRUE(result.has_value());
+
+    const auto& state = *result;
+
+    ASSERT_EQ(state.files.size(), 1);
+
+    const auto& file = state.files.at("file.txt");
+
+    ASSERT_EQ(file.size, 3);
+    ASSERT_FALSE(file.hash.empty());
+}
 
 

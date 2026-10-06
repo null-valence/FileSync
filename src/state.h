@@ -4,6 +4,9 @@
 #include <filesystem>
 #include <cstdint>
 #include <string>
+#include <expected>
+
+#include "scanner.h"
 
 namespace fs = std::filesystem;
 
@@ -16,3 +19,7 @@ struct FileState {
 struct SyncState {
     std::unordered_map<std::string, FileState> files;
 };
+
+std::expected<SyncState, std::string> load_state(const fs::path &path);
+std::expected<void, std::string> save_state(const fs::path& path, const SyncState& state);
+std::expected<SyncState, std::string> build_state(const Snapshot& snapshot, const fs::path& root);

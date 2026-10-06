@@ -114,7 +114,7 @@ ChangeStatus file_changed(const FileInfo& current, const FileState& previous, co
     return ChangeStatus::Unchanged;
 }
 
-void execute_sync(const std::vector<SyncAction>& actions, const fs::path& rootA, const fs::path& rootB) {
+std::expected<void, SyncError> execute_sync(const std::vector<SyncAction>& actions, const fs::path& rootA, const fs::path& rootB) {
     fs::path source_root;
     fs::path destination_root;
     
@@ -135,8 +135,8 @@ void execute_sync(const std::vector<SyncAction>& actions, const fs::path& rootA,
                 std::cout << "\n\t->\n\t" << destination << '\n';
 
                 auto result = copy_file_to_destination(source, destination);
-                if(result) std::cout << "Copied successfully";
-                else print_sync_error(result.error());
+                if(!result) return std::unexpected(result.error());
+                std::cout << "Copied successfully";
                 break;
             }
             case ActionType::Delete: {
@@ -144,8 +144,8 @@ void execute_sync(const std::vector<SyncAction>& actions, const fs::path& rootA,
                 std::cout << "Delete:\n\t" << destination << '\n';
 
                 auto result = delete_file(destination);
-                if(result) std::cout << "Deleted successfully";
-                else print_sync_error(result.error());
+                if(!result) return std::unexpected(result.error());
+                std::cout << "Deleted successfully";
                 break;
             }
             case ActionType::Update: {
@@ -155,13 +155,14 @@ void execute_sync(const std::vector<SyncAction>& actions, const fs::path& rootA,
                 std::cout << "\n\t->\n\t" << destination << '\n';
 
                 auto result = update_file(source, destination);
-                if(result) std::cout << "Updated successfully";
-                else print_sync_error(result.error());
+                if(!result) return std::unexpected(result.error());
+                std::cout << "Updated successfully";
                 break;
             }
         }
         std::cout << '\n';
     }
+    return {};
 }
 
 std::optional<bool> files_equal(const FileInfo& fileA, const FileInfo& fileB, const fs::path& rootA, const fs::path& rootB) {

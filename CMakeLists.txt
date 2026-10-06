@@ -13,6 +13,7 @@ add_executable(filesync
     src/scanner.cpp
     src/sync.cpp
     src/hasher.cpp
+    src/state.cpp
 )
 
 target_link_libraries(filesync PRIVATE OpenSSL::Crypto)
@@ -33,6 +34,8 @@ FetchContent_Declare(
     test/sync_test.cpp
     src/sync.cpp
     src/hasher.cpp
+    src/state.cpp
+    src/scanner.cpp
 )
 
 target_include_directories(filesync_tests PRIVATE src)
