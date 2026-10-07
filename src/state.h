@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <string>
 #include <expected>
+#include <unordered_set>
 
 #include "scanner.h"
 
@@ -22,4 +23,4 @@ struct SyncState {
 
 std::expected<SyncState, std::string> load_state(const fs::path &path);
 std::expected<void, std::string> save_state(const fs::path& path, const SyncState& state);
-std::expected<SyncState, std::string> build_state(const Snapshot& snapshot, const fs::path& root);
+std::expected<SyncState, std::string> build_state(const std::unordered_set<std::string>& skipped_conflicts, const SyncState& previous_state, const Snapshot& snapshot, const fs::path& root);

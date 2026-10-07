@@ -1,4 +1,5 @@
 #include <iostream>
+#include <unordered_set>
 
 #include "scanner.h"
 #include "sync.h"
@@ -37,18 +38,15 @@ int main(int argc, char* argv[]) {
             return 1;
         }
 
+        std::unordered_set<std::string> skipped_conflicts;
+        if(!result->conflicts.empty()) {
+            std::cout << "Conflicts detected:\n";
+            skipped_conflicts = resolve_conflict(*result);
+        }
+
         const auto& plan = *result;
 
         print_sync_plan(plan.actions);
-        if(!plan.conflicts.empty()) {
-            std::cerr << "Conflicts detected:\n";
-
-            for(const auto& conflict : plan.conflicts) {
-                std::cerr << "  " << conflict.relative_path << '\n';
-            }
-
-            return 1;
-        }
         
         auto execute_result = execute_sync(plan.actions, rootA, rootB);
 
@@ -59,7 +57,7 @@ int main(int argc, char* argv[]) {
         }
 
         auto final_snapshot = scan_directory(rootA);
-        auto state_result = build_state(final_snapshot, rootA);
+        auto state_result = build_state(skipped_conflicts, state, final_snapshot, rootA);
 
         if (!state_result) {
             std::cerr << "Failed to build state: "

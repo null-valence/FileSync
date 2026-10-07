@@ -295,3 +295,41 @@ SyncPlanResult plan_sync(const Snapshot& snapshotA, const Snapshot& snapshotB, c
 
     return plan;
 }
+
+std::unordered_set<std::string> resolve_conflict(SyncPlan& plan) {
+    std::unordered_set<std::string> skipped_conflicts;
+
+    for(const auto& conflict : plan.conflicts) {
+        std::cout << "Conflict: " << conflict.relative_path << "\n\n";
+        std::cout << "Choose:\n";
+        std::cout << "\t[A] Keep version from A\n";
+        std::cout << "\t[B] Keep version from B\n";
+        std::cout << "\t[S] Skip\n\n";
+        std::cout << "Selection (A/B/S): ";
+        char selection;
+        std::cin >> selection;
+        while(
+            selection != 'a' && selection != 'A' &&
+            selection != 'b' && selection != 'B' &&
+            selection != 's' && selection != 'S') {
+                std::cout << "Please select between A, B, or S\n";
+                std::cout << "Selection (A/B/S): ";
+                std::cin >> selection;
+        }
+
+        if(selection == 'a' || selection == 'A') plan.actions.push_back({
+            ActionType::Update,
+            SyncDirection::AtoB,
+            conflict.relative_path
+        });
+        else if(selection == 'b' || selection == 'B') plan.actions.push_back({
+            ActionType::Update,
+            SyncDirection::BtoA,
+            conflict.relative_path
+        });
+        else {
+            skipped_conflicts.emplace(conflict.relative_path);
+        }
+    }
+    return skipped_conflicts;
+}

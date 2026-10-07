@@ -65,3 +65,4 @@ SyncPlanResult plan_sync(
 void print_sync_error(SyncError error);
 void print_sync_plan(const std::vector<SyncAction>& actions);
 std::expected<void, SyncError> execute_sync(const std::vector<SyncAction>& actions, const fs::path& rootA, const fs::path& rootB);
+std::unordered_set<std::string> resolve_conflict(SyncPlan& plan);

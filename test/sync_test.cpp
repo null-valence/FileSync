@@ -688,8 +688,9 @@ TEST(State, BuildState) {
     }
 
     auto snapshot = scan_directory(root);
-
-    auto result = build_state(snapshot, root);
+    std::unordered_set<std::string> skipped_conflicts;
+    SyncState previous_state;
+    auto result = build_state(skipped_conflicts, previous_state, snapshot, root);
 
     ASSERT_TRUE(result.has_value());
 
@@ -703,4 +704,77 @@ TEST(State, BuildState) {
     ASSERT_FALSE(file.hash.empty());
 }
 
+// Test 19
+TEST(Execute, Copy_BtoA) {
+    const fs::path rootA = "/tmp/filesync-test-A";
+    const fs::path rootB = "/tmp/filesync-test-B";
+
+    fs::remove_all(rootA);
+    fs::remove_all(rootB);
+
+    fs::create_directories(rootA);
+    fs::create_directories(rootB);
+
+    {
+        std::ofstream(rootB / "file.txt") << "FROM B";
+    }
+
+    std::vector<SyncAction> actions;
+    actions.push_back({
+        ActionType::Copy,
+        SyncDirection::BtoA,
+        "file.txt"
+    });
+
+    auto result = execute_sync(actions, rootA, rootB);
+
+    ASSERT_TRUE(result.has_value());
+    ASSERT_TRUE(fs::exists(rootA / "file.txt"));
+
+    std::ifstream in(rootA / "file.txt");
+    std::string content;
+    std::getline(in, content);
+
+    ASSERT_EQ(content, "FROM B");
+}
+
+// Test 20
+TEST(Conflict, Skip) {
+    const fs::path rootA = "/tmp/filesync-test-A";
+
+    fs::remove_all(rootA);
+
+    fs::create_directories(rootA);
+
+    {
+        std::ofstream(rootA / "file.txt") << "OLD";
+    }
+
+    SyncState previous_state;
+    std::unordered_set<std::string> skipped_conflicts;
+    auto snapshot = scan_directory(rootA);
+    auto result = build_state(skipped_conflicts, previous_state, snapshot, rootA);
+
+    ASSERT_TRUE(result.has_value());
+    previous_state = *result;
+
+    {
+        std::ofstream(rootA / "file.txt") << "NEW_A";
+    }
+
+    snapshot = scan_directory(rootA);
+    skipped_conflicts.emplace("file.txt");
+    result = build_state(skipped_conflicts, previous_state, snapshot, rootA);
+
+    ASSERT_TRUE(result.has_value());
+    const auto& state = *result;
+
+    ASSERT_EQ(state.files.size(), 1);
+
+    const auto& file = state.files.at("file.txt");
+
+    ASSERT_EQ(file.size, 3);
+    ASSERT_EQ(file.last_modified, previous_state.files.at("file.txt").last_modified);
+    ASSERT_EQ(file.hash, previous_state.files.at("file.txt").hash);
+}
 

@@ -66,9 +66,17 @@ std::expected<void, std::string> save_state(const fs::path& path, const SyncStat
     return {};
 }
 
-std::expected<SyncState, std::string> build_state(const Snapshot& snapshot, const fs::path& root) {
+std::expected<SyncState, std::string> build_state(const std::unordered_set<std::string>& skipped_conflicts, const SyncState& previous_state, const Snapshot& snapshot, const fs::path& root) {
     SyncState state;
     for(const auto& [path, file] : snapshot.files) {
+        if(skipped_conflicts.find(path) != skipped_conflicts.end()) {
+            auto previous = previous_state.files.find(path);
+            if(previous != previous_state.files.end()) {
+                state.files.emplace(path, previous->second);
+            }
+            continue;
+        }
+
         auto hash = hash_file(root / file.relative_path);
         if(!hash) return std::unexpected("Failed to hash file: " + (root / file.relative_path).string());
         
