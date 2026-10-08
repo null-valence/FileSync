@@ -778,3 +778,75 @@ TEST(Conflict, Skip) {
     ASSERT_EQ(file.hash, previous_state.files.at("file.txt").hash);
 }
 
+// Test 21
+TEST(Execute, Update_temp) {
+    const fs::path rootA = "/tmp/filesync-test-A";
+    const fs::path rootB = "/tmp/filesync-test-B";
+
+    fs::remove_all(rootA);
+    fs::remove_all(rootB);
+
+    fs::create_directories(rootA);
+    fs::create_directories(rootB);
+
+    {
+        std::ofstream(rootA / "file.txt") << "NEW";
+        std::ofstream(rootB / "file.txt") << "OLD";
+    }
+    std::vector<SyncAction> actions;
+    actions.push_back({
+        ActionType::Update,
+        SyncDirection::AtoB,
+        "file.txt"
+    });
+    
+    std::ifstream before(rootB / "file.txt");
+    std::string old_content;
+    std::getline(before, old_content);
+    ASSERT_EQ(old_content, "OLD");
+
+    auto result = execute_sync(actions, rootA, rootB);
+
+    ASSERT_TRUE(result.has_value());
+    ASSERT_TRUE(fs::exists(rootB / "file.txt"));
+
+    std::ifstream in(rootB / "file.txt");
+    std::string content;
+    std::getline(in, content);
+
+    ASSERT_EQ(content, "NEW");
+
+    fs::path temp_file = rootB / ".filesync-file.txt.tmp";
+    ASSERT_FALSE(fs::exists(temp_file));
+}
+
+// Test 22
+TEST(State, SaveAtomic) {
+    const fs::path root = "/tmp/filesync-test-state";
+    fs::remove_all(root);
+    fs::create_directories(root);
+
+    const fs::path state_path = root / "state";
+
+    SyncState state;
+    state.files["file.txt"] = {
+        5,
+        fs::file_time_type{},
+        "abc123"
+    };
+
+    auto result = save_state(state_path, state);
+
+    ASSERT_TRUE(result.has_value());
+    ASSERT_TRUE(fs::exists(state_path));
+    ASSERT_FALSE(fs::exists(state_path.string() + ".tmp"));
+
+    auto loaded = load_state(state_path);
+
+    ASSERT_TRUE(loaded.has_value());
+    ASSERT_EQ(loaded->files.at("file.txt").size, 5);
+    ASSERT_EQ(loaded->files.at("file.txt").hash, "abc123");
+}
+
+
+

@@ -49,9 +49,11 @@ std::expected<SyncState, std::string> load_state(const fs::path &path) {
 }
 
 std::expected<void, std::string> save_state(const fs::path& path, const SyncState& state) {
-    std::ofstream out(path);
+    fs::path temp_file = path.string() + ".tmp";
 
-    if(!out) return std::unexpected("Failed to open state file for writitng");
+    std::ofstream out(temp_file);
+
+    if(!out) return std::unexpected("Failed to open state file for writing");
     out << "1\n";
 
     for(const auto& [path, file] : state.files) {
@@ -62,6 +64,15 @@ std::expected<void, std::string> save_state(const fs::path& path, const SyncStat
     }
 
     if(!out) return std::unexpected("Failed while writing state file");
+    out.close();
+    if (!out) return std::unexpected("Failed to close temporary state file");
+    
+    std::error_code ec;
+    fs::rename(temp_file, path, ec);
+    if(ec) {
+        fs::remove(temp_file);
+        return std::unexpected("Failed to replace state file");
+    }
 
     return {};
 }

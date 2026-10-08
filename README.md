@@ -239,7 +239,7 @@ The project is being developed in stages:
 - [x] Persistent synchronization state
 - [x] Conflict detection
 - [x] Automated test suite
-- [ ] Robust two-way synchronization
+- [x] Robust two-way synchronization
 - [ ] TCP networking
 - [ ] Incremental/block-based transfer
 - [ ] Resumable transfers

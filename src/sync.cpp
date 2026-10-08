@@ -86,13 +86,20 @@ std::expected<void, SyncError> delete_file(const fs::path& path) {
 
 std::expected<void, SyncError> update_file(const fs::path& source, const fs::path& destination) {
     std::error_code ec;
+    fs::path temp_file = destination.parent_path() / (".filesync-" + destination.filename().string() + ".tmp");
     fs::copy_file(
         source,
-        destination,
+        temp_file,
         fs::copy_options::overwrite_existing,
         ec
     );
     if(ec) return std::unexpected(classify_error(ec, PathRole::Source));
+
+    fs::rename(temp_file, destination, ec);
+    if(ec) {
+        fs::remove(temp_file);
+        return std::unexpected(classify_error(ec, PathRole::Destination));
+    }
 
     auto source_time = fs::last_write_time(source, ec);
     if(ec) return std::unexpected(classify_error(ec, PathRole::Source));
