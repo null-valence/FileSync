@@ -55,15 +55,21 @@ SyncError classify_error(const std::error_code& ec, PathRole role) {
 
 std::expected<void, SyncError> copy_file_to_destination(const fs::path& source, const fs::path& destination) {
     std::error_code ec;
+    auto source_time = fs::last_write_time(source, ec);
+    if(ec) return std::unexpected(classify_error(ec, PathRole::Source));
 
     fs::create_directories(destination.parent_path(), ec);
     if(ec) return std::unexpected(classify_error(ec, PathRole::Destination));
     
-    fs::copy_file(source, destination, ec);
+    fs::path temp_file = destination.parent_path() / (".filesync-" + destination.filename().string() + ".tmp");
+    fs::copy_file(source, temp_file, ec);
     if(ec) return std::unexpected(classify_error(ec, PathRole::Source));
 
-    auto source_time = fs::last_write_time(source, ec);
-    if(ec) return std::unexpected(classify_error(ec, PathRole::Source));
+    fs::rename(temp_file, destination, ec);
+    if(ec) {
+        fs::remove(temp_file);
+        return std::unexpected(classify_error(ec, PathRole::Destination));
+    }
 
     fs::last_write_time(destination, source_time, ec);
     if(ec) return std::unexpected(classify_error(ec, PathRole::Destination));
@@ -86,6 +92,9 @@ std::expected<void, SyncError> delete_file(const fs::path& path) {
 
 std::expected<void, SyncError> update_file(const fs::path& source, const fs::path& destination) {
     std::error_code ec;
+    auto source_time = fs::last_write_time(source, ec);
+    if(ec) return std::unexpected(classify_error(ec, PathRole::Source));
+
     fs::path temp_file = destination.parent_path() / (".filesync-" + destination.filename().string() + ".tmp");
     fs::copy_file(
         source,
@@ -100,9 +109,6 @@ std::expected<void, SyncError> update_file(const fs::path& source, const fs::pat
         fs::remove(temp_file);
         return std::unexpected(classify_error(ec, PathRole::Destination));
     }
-
-    auto source_time = fs::last_write_time(source, ec);
-    if(ec) return std::unexpected(classify_error(ec, PathRole::Source));
 
     fs::last_write_time(destination, source_time, ec);
     if(ec) return std::unexpected(classify_error(ec, PathRole::Destination));
