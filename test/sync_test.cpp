@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include "sync.h"
 #include "hasher.h"
+#include "roots.h"
 #include <chrono>
 #include <fstream>
 
@@ -928,5 +929,91 @@ TEST(Execute, RejectsSymlinkInParentDirectory) {
     fs::remove_all(rootB);
     fs::remove_all(external);
 }
+
+// Test 26
+TEST(Roots, AcceptsSeparateDirectories) {
+    const auto base = fs::temp_directory_path() / "filesync-roots-valid";
+    const auto a = base / "A";
+    const auto b = base / "B";
+
+    fs::remove_all(base);
+    fs::create_directories(a);
+    fs::create_directories(b);
+
+    auto rootA = a;
+    auto rootB = b;
+
+    EXPECT_TRUE(validate_roots(rootA, rootB));
+
+    fs::remove_all(base);
+}
+
+// Test 27
+TEST(Roots, RejectsSameDirectory) {
+    const auto base = fs::temp_directory_path() / "filesync-roots-same";
+
+    fs::remove_all(base);
+    fs::create_directories(base);
+
+    auto rootA = base;
+    auto rootB = base;
+
+    EXPECT_FALSE(validate_roots(rootA, rootB));
+
+    fs::remove_all(base);
+}
+
+// Test 28
+TEST(Roots, RejectsNestedDirectories) {
+    const auto base = fs::temp_directory_path() / "filesync-roots-nested";
+    const auto a = base / "A";
+    const auto nested = a / "nested";
+
+    fs::remove_all(base);
+    fs::create_directories(nested);
+
+    auto rootA = a;
+    auto rootB = nested;
+
+    EXPECT_FALSE(validate_roots(rootA, rootB));
+
+    fs::remove_all(base);
+}
+
+// Test 29
+TEST(Roots, RejectsNonexistentDirectory) {
+    const auto base = fs::temp_directory_path() / "filesync-roots-missing";
+
+    fs::remove_all(base);
+
+    auto rootA = base / "missing";
+    auto rootB = base / "B";
+
+    EXPECT_FALSE(validate_roots(rootA, rootB));
+}
+
+// Test 30
+TEST(Roots, RejectsFileAndDirectory) {
+    const auto base = fs::temp_directory_path() / "filesync-roots-file-test";
+    const auto a = base / "A";
+    const auto b = base / "B";
+
+    fs::remove_all(base);
+    fs::create_directories(a);
+    fs::create_directories(b);
+    
+    auto rootA = a;
+    auto rootB = b;
+
+    {
+        std::ofstream(rootA / "file.txt") << "file";
+    }
+    rootA /= "file.txt";
+
+    EXPECT_FALSE(validate_roots(rootA, rootB));
+
+    fs::remove_all(base);
+}
+
 
 

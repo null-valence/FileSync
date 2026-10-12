@@ -3,6 +3,7 @@
 
 #include "scanner.h"
 #include "sync.h"
+#include "roots.h"
 
 namespace fs = std::filesystem;
 
@@ -15,6 +16,7 @@ int main(int argc, char* argv[]) {
 
     try {
         fs::path rootA = argv[1], rootB = argv[2];
+        if(!validate_roots(rootA, rootB)) return 1;
     
         auto snapshotA = scan_directory(rootA), snapshotB = scan_directory(rootB);
         if(!snapshotA) {
