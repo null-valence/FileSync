@@ -127,6 +127,41 @@ ChangeStatus file_changed(const FileInfo& current, const FileState& previous, co
     return ChangeStatus::Unchanged;
 }
 
+bool is_safe_relative_path(const fs::path& path) {
+    if(path.empty() || path.is_absolute()) return false;
+    for(const auto& component : path) {
+        if(component == "..") return false;
+    }
+
+    return true;
+}
+
+std::expected<bool, SyncError> has_symlink_component(const fs::path& root, const fs::path& relative_path) {
+    fs::path current = root;
+    std::error_code ec;
+
+    auto status = fs::symlink_status(current, ec);
+    if(ec) {
+        if(ec == std::errc::no_such_file_or_directory) return false;
+        return std::unexpected(classify_error(ec, PathRole::Source));
+    }
+    if (fs::is_symlink(status)) return true;
+
+    for (const auto& component : relative_path) {
+        current /= component;
+
+        status = fs::symlink_status(current, ec);
+
+        if(ec) {
+            if(ec == std::errc::no_such_file_or_directory) return false;
+            return std::unexpected(classify_error(ec, PathRole::Source));
+        }
+        if (fs::is_symlink(status)) return true;
+    }
+
+    return false;
+}
+
 std::expected<void, SyncError> execute_sync(const std::vector<SyncAction>& actions, const fs::path& rootA, const fs::path& rootB) {
     fs::path source_root;
     fs::path destination_root;
@@ -139,11 +174,23 @@ std::expected<void, SyncError> execute_sync(const std::vector<SyncAction>& actio
             source_root = rootB;
             destination_root = rootA;
         }
+        if(!is_safe_relative_path(action.relative_path)) return std::unexpected(SyncError::InvalidPath);
 
         switch(action.type) {
             case ActionType::Copy: {
                 fs::path source = source_root / action.relative_path;
                 fs::path destination = destination_root / action.relative_path;
+                auto symlink_result_source = has_symlink_component(source_root, action.relative_path);
+                auto symlink_result_deestination = has_symlink_component(destination_root, action.relative_path);
+
+                if(!symlink_result_source) return std::unexpected(symlink_result_source.error());
+                if(!symlink_result_deestination) return std::unexpected(symlink_result_deestination.error());
+                
+                if(*symlink_result_source || *symlink_result_deestination) {
+                    std::cerr << "Symlink or unsafe path detected\n";
+                    return std::unexpected(SyncError::InvalidPath);
+                }
+
                 std::cout << "Copy:\n\t" << source;
                 std::cout << "\n\t->\n\t" << destination << '\n';
 
@@ -154,6 +201,15 @@ std::expected<void, SyncError> execute_sync(const std::vector<SyncAction>& actio
             }
             case ActionType::Delete: {
                 fs::path destination = destination_root / action.relative_path;
+                auto symlink_result_deestination = has_symlink_component(destination_root, action.relative_path);
+
+                if(!symlink_result_deestination) return std::unexpected(symlink_result_deestination.error());
+                
+                if(*symlink_result_deestination) {
+                    std::cerr << "Symlink or unsafe path detected\n";
+                    return std::unexpected(SyncError::InvalidPath);
+                }
+
                 std::cout << "Delete:\n\t" << destination << '\n';
 
                 auto result = delete_file(destination);
@@ -164,6 +220,17 @@ std::expected<void, SyncError> execute_sync(const std::vector<SyncAction>& actio
             case ActionType::Update: {
                 fs::path source = source_root / action.relative_path;
                 fs::path destination = destination_root / action.relative_path;
+                auto symlink_result_source = has_symlink_component(source_root, action.relative_path);
+                auto symlink_result_deestination = has_symlink_component(destination_root, action.relative_path);
+
+                if(!symlink_result_source) return std::unexpected(symlink_result_source.error());
+                if(!symlink_result_deestination) return std::unexpected(symlink_result_deestination.error());
+                
+                if(*symlink_result_source || *symlink_result_deestination) {
+                    std::cerr << "Symlink or unsafe path detected\n";
+                    return std::unexpected(SyncError::InvalidPath);
+                }
+
                 std::cout << "Update:\n\t" << source;
                 std::cout << "\n\t->\n\t" << destination << '\n';
 

@@ -1,7 +1,7 @@
 #include "scanner.h"
 #include "hasher.h"
 
-Snapshot scan_directory(const fs::path& root) {
+std::expected<Snapshot, std::string> scan_directory(const fs::path& root) {
     Snapshot snapshot;
 
     for (auto it = fs::recursive_directory_iterator(root);
@@ -13,6 +13,9 @@ Snapshot scan_directory(const fs::path& root) {
             continue;
         }
 
+        if(it->is_symlink()) {
+            return std::unexpected("Symlink detected: " + it->path().string());
+        }
         if(!it->is_regular_file()) continue;
 
         fs::path relative_path = fs::relative(it->path(), root);

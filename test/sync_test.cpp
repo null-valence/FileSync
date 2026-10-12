@@ -688,9 +688,10 @@ TEST(State, BuildState) {
     }
 
     auto snapshot = scan_directory(root);
+    ASSERT_TRUE(snapshot);
     std::unordered_set<std::string> skipped_conflicts;
     SyncState previous_state;
-    auto result = build_state(skipped_conflicts, previous_state, snapshot, root);
+    auto result = build_state(skipped_conflicts, previous_state, *snapshot, root);
 
     ASSERT_TRUE(result.has_value());
 
@@ -753,7 +754,8 @@ TEST(Conflict, Skip) {
     SyncState previous_state;
     std::unordered_set<std::string> skipped_conflicts;
     auto snapshot = scan_directory(rootA);
-    auto result = build_state(skipped_conflicts, previous_state, snapshot, rootA);
+    ASSERT_TRUE(snapshot);
+    auto result = build_state(skipped_conflicts, previous_state, *snapshot, rootA);
 
     ASSERT_TRUE(result.has_value());
     previous_state = *result;
@@ -763,8 +765,9 @@ TEST(Conflict, Skip) {
     }
 
     snapshot = scan_directory(rootA);
+    ASSERT_TRUE(snapshot);
     skipped_conflicts.emplace("file.txt");
-    result = build_state(skipped_conflicts, previous_state, snapshot, rootA);
+    result = build_state(skipped_conflicts, previous_state, *snapshot, rootA);
 
     ASSERT_TRUE(result.has_value());
     const auto& state = *result;
@@ -848,5 +851,82 @@ TEST(State, SaveAtomic) {
     ASSERT_EQ(loaded->files.at("file.txt").hash, "abc123");
 }
 
+// Test 23
+TEST(Execute, RejectsUnsafeRelativePath) {
+    fs::path rootA = "/tmp/filesync-test-safe-A";
+    fs::path rootB = "/tmp/filesync-test-safe-B";
+    
+    fs::remove_all(rootA);
+    fs::remove_all(rootB);
+
+    fs::create_directories(rootA);
+    fs::create_directories(rootB);
+    
+    std::vector<SyncAction> actions = {
+        {ActionType::Copy, SyncDirection::AtoB, "../outside.txt"}
+    };
+
+    auto result = execute_sync(actions, rootA, rootB);
+
+    ASSERT_FALSE(result);
+    EXPECT_EQ(result.error(), SyncError::InvalidPath);
+}
+
+// Test 24
+TEST(Scanner, RejectsSymlinks) {
+    fs::path root = "/tmp/filesync-test-scanner";
+    fs::remove_all(root);
+    fs::create_directories(root);
+
+    fs::path target = root / "target.txt";
+    fs::path link = root / "link.txt";
+
+    std::ofstream(target) << "hello";
+    fs::create_symlink(target, link);
+
+    auto result = scan_directory(root);
+
+    EXPECT_FALSE(result);
+
+    fs::remove_all(root);
+}
+
+// Test 25
+TEST(Execute, RejectsSymlinkInParentDirectory) {
+    fs::path rootA = "/tmp/filesync-test-parent-A";
+    fs::path rootB = "/tmp/filesync-test-parent-B";
+    fs::path external = "/tmp/filesync-test-external";
+
+    fs::remove_all(rootA);
+    fs::remove_all(rootB);
+    fs::remove_all(external);
+
+    fs::create_directories(rootA / "docs");
+    fs::create_directories(rootB);
+    fs::create_directories(external);
+
+    std::ofstream(rootA / "docs" / "notes.txt") << "hello";
+    std::ofstream(external / "notes.txt") << "untouched";
+
+    fs::create_directory_symlink(external, rootB / "docs");
+
+    std::vector<SyncAction> actions = {
+        {ActionType::Copy, SyncDirection::AtoB, "docs/notes.txt"}
+    };
+
+    auto result = execute_sync(actions, rootA, rootB);
+
+    ASSERT_FALSE(result);
+    EXPECT_EQ(result.error(), SyncError::InvalidPath);
+
+    std::ifstream file(external / "notes.txt");
+    std::string content;
+    file >> content;
+    EXPECT_EQ(content, "untouched");
+
+    fs::remove_all(rootA);
+    fs::remove_all(rootB);
+    fs::remove_all(external);
+}
 
 

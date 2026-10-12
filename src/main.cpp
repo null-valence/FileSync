@@ -16,8 +16,16 @@ int main(int argc, char* argv[]) {
     try {
         fs::path rootA = argv[1], rootB = argv[2];
     
-        auto snapshotA = scan_directory(rootA),
-            snapshotB = scan_directory(rootB);
+        auto snapshotA = scan_directory(rootA), snapshotB = scan_directory(rootB);
+        if(!snapshotA) {
+            std::cerr << snapshotA.error();
+            return 1;
+        }
+        if(!snapshotB) {
+            std::cerr << snapshotB.error();
+            return 1;
+        }
+        
         
         const fs::path state_path = rootA / ".filesync" / "state";
         SyncState state;
@@ -32,7 +40,7 @@ int main(int argc, char* argv[]) {
             state = *state_result;
         }
 
-        auto result = plan_sync(snapshotA, snapshotB, state, rootA, rootB);
+        auto result = plan_sync(*snapshotA, *snapshotB, state, rootA, rootB);
         if(!result) {
             std::cerr << "Failed to create synchronization plan\n";
             return 1;
@@ -57,7 +65,11 @@ int main(int argc, char* argv[]) {
         }
 
         auto final_snapshot = scan_directory(rootA);
-        auto state_result = build_state(skipped_conflicts, state, final_snapshot, rootA);
+        if(!final_snapshot) {
+            std::cerr << final_snapshot.error();
+            return 1;
+        }
+        auto state_result = build_state(skipped_conflicts, state, *final_snapshot, rootA);
 
         if (!state_result) {
             std::cerr << "Failed to build state: "

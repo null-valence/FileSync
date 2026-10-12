@@ -44,7 +44,8 @@ enum class SyncError {
     SourceNotFound,
     DestinationNotFound,
     PermissionDenied,
-    FilesystemError
+    FilesystemError,
+    InvalidPath
 };
 
 enum class ChangeStatus {

@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <cstdint>
 #include <string>
+#include <expected>
 
 namespace fs = std::filesystem;
 
@@ -17,4 +18,4 @@ struct Snapshot {
     std::unordered_map<std::string, FileInfo> files;
 };
 
-Snapshot scan_directory(const fs::path& root);
+std::expected<Snapshot, std::string> scan_directory(const fs::path& root);
