@@ -26,19 +26,19 @@ void print_sync_plan(const std::vector<SyncAction>& actions) {
 void print_sync_error(SyncError error) {
     switch(error) {
         case SyncError::SourceNotFound:
-            std::cout << "Source file was not found\n";
+            std::cerr << "Source file was not found\n";
             break;
         
         case SyncError::DestinationNotFound:
-            std::cout << "Destination was not found\n";
+            std::cerr << "Destination was not found\n";
             break;
         
         case SyncError::PermissionDenied:
-            std::cout << "Permission denied";
+            std::cerr << "Permission denied";
             break;
 
         default:
-            std::cout << "Filesystem error";
+            std::cerr << "Filesystem error";
             break;
     }
 }
@@ -83,8 +83,8 @@ std::expected<void, SyncError> delete_file(const fs::path& path) {
     if(ec) return std::unexpected(classify_error(ec, PathRole::Destination));
 
     /*
-    remove(path, ec) returns 0 on failure, 1 on success
-    since failure means, file was already removed after scanning process, but before this removal,
+    remove() returning false means nothing was removed, which includes the target not existing.
+    since false means, file was already removed after scanning process, but before this removal,
     this is also a success, so return {} in both cases.
     */
     return {};

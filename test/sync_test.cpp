@@ -441,7 +441,7 @@ TEST(PlanSync, AChangedBChanged) {
     fs::create_directories(rootB);
 
     {
-        std::ofstream(rootB / "file.txt") << "NEW1";
+        std::ofstream(rootA / "file.txt") << "NEW1";
         std::ofstream(rootB / "file.txt") << "NEW2";
     }
 
@@ -679,20 +679,23 @@ TEST(Execute, Update) {
 
 // Test 18
 TEST(State, BuildState) {
-    const fs::path root = "/tmp/filesync-test";
+    const fs::path rootA = "/tmp/filesync-test/A";
+    const fs::path rootB = "/tmp/filesync-test/B";
 
-    fs::remove_all(root);
-    fs::create_directories(root);
+    fs::remove_all(rootA);
+    fs::remove_all(rootB);
+    fs::create_directories(rootA);
+    fs::create_directories(rootB);
 
     {
-        std::ofstream(root / "file.txt") << "NEW";
+        std::ofstream(rootA / "file.txt") << "NEW";
     }
 
-    auto snapshot = scan_directory(root);
+    auto snapshot = scan_directory(rootA, rootB, "A", "B");
     ASSERT_TRUE(snapshot);
     std::unordered_set<std::string> skipped_conflicts;
     SyncState previous_state;
-    auto result = build_state(skipped_conflicts, previous_state, *snapshot, root);
+    auto result = build_state(skipped_conflicts, previous_state, *snapshot, rootA);
 
     ASSERT_TRUE(result.has_value());
 
@@ -742,11 +745,14 @@ TEST(Execute, Copy_BtoA) {
 
 // Test 20
 TEST(Conflict, Skip) {
-    const fs::path rootA = "/tmp/filesync-test-A";
+    const fs::path rootA = "/tmp/filesync-test/A";
+    const fs::path rootB = "/tmp/filesync-test/B";
 
     fs::remove_all(rootA);
+    fs::remove_all(rootB);
 
     fs::create_directories(rootA);
+    fs::create_directories(rootB);
 
     {
         std::ofstream(rootA / "file.txt") << "OLD";
@@ -754,7 +760,7 @@ TEST(Conflict, Skip) {
 
     SyncState previous_state;
     std::unordered_set<std::string> skipped_conflicts;
-    auto snapshot = scan_directory(rootA);
+    auto snapshot = scan_directory(rootA, rootB, "A", "B");
     ASSERT_TRUE(snapshot);
     auto result = build_state(skipped_conflicts, previous_state, *snapshot, rootA);
 
@@ -765,7 +771,7 @@ TEST(Conflict, Skip) {
         std::ofstream(rootA / "file.txt") << "NEW_A";
     }
 
-    snapshot = scan_directory(rootA);
+    snapshot = scan_directory(rootA, rootB, "A", "B");
     ASSERT_TRUE(snapshot);
     skipped_conflicts.emplace("file.txt");
     result = build_state(skipped_conflicts, previous_state, *snapshot, rootA);
@@ -875,21 +881,24 @@ TEST(Execute, RejectsUnsafeRelativePath) {
 
 // Test 24
 TEST(Scanner, RejectsSymlinks) {
-    fs::path root = "/tmp/filesync-test-scanner";
-    fs::remove_all(root);
-    fs::create_directories(root);
+    fs::path rootA = "/tmp/filesync-test-scanner/A";
+    fs::path rootB = "/tmp/filesync-test-scanner/B";
+    fs::remove_all(rootA);
+    fs::remove_all(rootB);
+    fs::create_directories(rootA);
+    fs::create_directories(rootB);
 
-    fs::path target = root / "target.txt";
-    fs::path link = root / "link.txt";
+    fs::path target = rootA / "target.txt";
+    fs::path link = rootA / "link.txt";
 
     std::ofstream(target) << "hello";
     fs::create_symlink(target, link);
 
-    auto result = scan_directory(root);
+    auto result = scan_directory(rootA, rootB, "A", "B");
 
     EXPECT_FALSE(result);
 
-    fs::remove_all(root);
+    fs::remove_all(rootA);
 }
 
 // Test 25

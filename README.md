@@ -34,6 +34,8 @@ The current implementation supports local synchronization between two directorie
 - Structured error handling using `std::expected`
 - Automated tests using GoogleTest
 - Linux-first development
+   
+*Symbolic links are ignored.*  
 
 ### Planned
 

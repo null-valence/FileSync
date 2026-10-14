@@ -18,4 +18,4 @@ struct Snapshot {
     std::unordered_map<std::string, FileInfo> files;
 };
 
-std::expected<Snapshot, std::string> scan_directory(const fs::path& root);
+std::expected<Snapshot, std::string> scan_directory(const fs::path& root1, const fs::path& root2, std::string folderA_name, std::string folderB_name);

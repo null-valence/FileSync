@@ -17,8 +17,10 @@ int main(int argc, char* argv[]) {
     try {
         fs::path rootA = argv[1], rootB = argv[2];
         if(!validate_roots(rootA, rootB)) return 1;
+        std::string folderA_name = fs::canonical(rootA).filename();
+        std::string folderB_name = fs::canonical(rootB).filename();
     
-        auto snapshotA = scan_directory(rootA), snapshotB = scan_directory(rootB);
+        auto snapshotA = scan_directory(rootA, rootB, folderA_name, folderB_name), snapshotB = scan_directory(rootB, rootA, folderB_name, folderA_name);
         if(!snapshotA) {
             std::cerr << snapshotA.error();
             return 1;
@@ -66,7 +68,7 @@ int main(int argc, char* argv[]) {
             return 1;
         }
 
-        auto final_snapshot = scan_directory(rootA);
+        auto final_snapshot = scan_directory(rootA, rootB, folderA_name, folderB_name);
         if(!final_snapshot) {
             std::cerr << final_snapshot.error();
             return 1;
