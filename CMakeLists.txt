@@ -19,10 +19,12 @@ add_executable(filesync
 
 add_executable(network_server
     src/network_server.cpp
+    src/connection.cpp
 )
 
 add_executable(network_client
     src/network_client.cpp
+    src/connection.cpp
 )
 
 target_link_libraries(filesync PRIVATE OpenSSL::Crypto)
