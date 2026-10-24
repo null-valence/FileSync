@@ -17,6 +17,14 @@ add_executable(filesync
     src/roots.cpp
 )
 
+add_executable(network_server
+    src/network_server.cpp
+)
+
+add_executable(network_client
+    src/network_client.cpp
+)
+
 target_link_libraries(filesync PRIVATE OpenSSL::Crypto)
 
 
