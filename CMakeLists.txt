@@ -20,12 +20,14 @@ add_executable(filesync
 add_executable(network_server
     src/network_server.cpp
     src/connection.cpp
+    src/protocol.cpp
     src/line_parser.cpp
 )
 
 add_executable(network_client
     src/network_client.cpp
     src/connection.cpp
+    src/protocol.cpp
     src/line_parser.cpp
 )
 
@@ -53,6 +55,7 @@ FetchContent_Declare(
     test/connection_test.cpp
     src/connection.cpp
     src/line_parser.cpp
+    src/protocol.cpp
 )
 
 target_include_directories(filesync_tests PRIVATE src)
