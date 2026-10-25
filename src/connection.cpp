@@ -13,9 +13,10 @@ Connection::~Connection() {
 }
 
 bool Connection::send_all(const std::string& message) {
-    std:: size_t sent =0;
+    std::size_t sent =0;
     while(sent < message.size()) {
-        ssize_t n = send(socket_fd_, message.data() + sent, message.size() - sent, 0);
+        ssize_t n = send(socket_fd_, message.data() + sent, message.size() - sent, MSG_NOSIGNAL);
+        if(n == -1 && errno == EINTR) continue;
         if(n <= 0) return false;
 
         sent += static_cast<std::size_t>(n);
@@ -34,6 +35,7 @@ bool Connection::receive_line(std::string& message) {
 
         char buffer[256];
         ssize_t n = recv(socket_fd_, buffer, sizeof(buffer), 0);
+        if(n == -1 && errno == EINTR) continue;
         if(n <= 0) return false;
 
         receive_buffer_.append(buffer, static_cast<std::size_t>(n));

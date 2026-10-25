@@ -47,3 +47,16 @@ TEST(LineParserTest, ReturnsFalseWhenNoCompleteLineExists) {
     EXPECT_FALSE(extract_line(buffer, message));
     EXPECT_EQ(buffer, "PING");
 }
+
+// Test 4
+TEST(ConnectionTest, DisconnectedPeer) {
+    int socket_fds[2];
+    ASSERT_EQ(socketpair(AF_UNIX, SOCK_STREAM, 0, socket_fds), 0);
+    
+    Connection client(socket_fds[1]);
+    close(socket_fds[0]);
+
+    ASSERT_FALSE(client.send_all("PING\n"));
+    ASSERT_FALSE(client.send_all("PING\n"));
+    ASSERT_FALSE(client.send_all("PING\n"));
+}
