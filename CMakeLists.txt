@@ -20,11 +20,13 @@ add_executable(filesync
 add_executable(network_server
     src/network_server.cpp
     src/connection.cpp
+    src/line_parser.cpp
 )
 
 add_executable(network_client
     src/network_client.cpp
     src/connection.cpp
+    src/line_parser.cpp
 )
 
 target_link_libraries(filesync PRIVATE OpenSSL::Crypto)
@@ -48,6 +50,9 @@ FetchContent_Declare(
     src/state.cpp
     src/scanner.cpp
     src/roots.cpp
+    test/connection_test.cpp
+    src/connection.cpp
+    src/line_parser.cpp
 )
 
 target_include_directories(filesync_tests PRIVATE src)

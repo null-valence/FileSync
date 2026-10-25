@@ -1,4 +1,5 @@
 #include "connection.h"
+#include "line_parser.h"
 
 #include <sys/socket.h>
 #include <unistd.h>
@@ -25,14 +26,17 @@ bool Connection::send_all(const std::string& message) {
 
 bool Connection::receive_line(std::string& message) {
     message.clear();
-    char buffer[256];
 
-    while(message.find('\n') == std::string::npos) {
+    while(true) {
+        if(extract_line(receive_buffer_, message)) return true;
+        
+        if(receive_buffer_.size() > 1024) return false;
+
+        char buffer[256];
         ssize_t n = recv(socket_fd_, buffer, sizeof(buffer), 0);
         if(n <= 0) return false;
 
-        message.append(buffer, static_cast<std::size_t>(n));
-        if(message.size() > 1024) return false;
+        receive_buffer_.append(buffer, static_cast<std::size_t>(n));
     }
 
     return true;

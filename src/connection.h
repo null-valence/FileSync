@@ -5,6 +5,7 @@
 class Connection {
 private:
     int socket_fd_;
+    std::string receive_buffer_;
 
 public:
     explicit Connection(int socket_fd);
