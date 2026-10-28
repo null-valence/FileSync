@@ -22,6 +22,7 @@ add_executable(network_server
     src/connection.cpp
     src/protocol.cpp
     src/line_parser.cpp
+    src/file_transfer.cpp
 )
 
 add_executable(network_client
@@ -29,6 +30,7 @@ add_executable(network_client
     src/connection.cpp
     src/protocol.cpp
     src/line_parser.cpp
+    src/file_transfer.cpp
 )
 
 target_link_libraries(filesync PRIVATE OpenSSL::Crypto)
@@ -56,6 +58,7 @@ FetchContent_Declare(
     src/connection.cpp
     src/line_parser.cpp
     src/protocol.cpp
+    src/file_transfer.cpp
 )
 
 target_include_directories(filesync_tests PRIVATE src)
