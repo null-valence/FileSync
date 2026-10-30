@@ -18,6 +18,14 @@ int main() {
         std::cerr << "socket: " << strerror(errno) << '\n';
         return 1;
     }
+    
+    int opt = 1;
+
+    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) == -1) {
+        std::cerr << "setsockopt: " << strerror(errno) << '\n';
+        close(server_fd);
+        return 1;
+    }
 
     sockaddr_in address{};
     address.sin_family = AF_INET;
@@ -50,20 +58,30 @@ int main() {
 
     std::string message;
 
-    if (!connection.receive_line(message)) {
+    if (!connection.receive_message(message)) {
         std::cerr << "Failed to receive request.\n";
         close(server_fd);
         return 1;
     }
 
-    if (message != "PING\n") {
-        std::cerr << "Unexpected message received.\n";
-    } else {
+    if (message == "PING") {
         std::cout << "Received: " << message;
 
-        if (connection.send_all("PONG\n")) {
-            std::cout << "Sent: PONG\n";
-        } else {
+        if (!connection.send_all("PONG")) {
+            std::cerr << "Failed to send response.\n";
+            close(server_fd);
+            return 1;
+        }
+
+        std::cout << "Sent: PONG\n";
+    } else if (message.starts_with("GET ")) {
+        if (!connection.send_all("ERR Not implemented")) {
+            std::cerr << "Failed to send response.\n";
+            close(server_fd);
+            return 1;
+        }
+    } else {
+        if (!connection.send_all("ERR Unknown command")) {
             std::cerr << "Failed to send response.\n";
             close(server_fd);
             return 1;

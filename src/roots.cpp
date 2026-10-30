@@ -53,3 +53,28 @@ bool validate_roots(fs::path& rootA, fs::path& rootB) {
 
     return true;
 }
+
+std::optional<fs::path> resolve_shared_path(const fs::path& shared_root, const fs::path& requested_path) {
+    if (requested_path.is_absolute()) return std::nullopt;
+    for(auto& dir : requested_path) {
+        if(dir == "..") return std::nullopt;
+    }
+    
+    std::error_code ec;
+    fs::path root = fs::canonical(shared_root, ec);
+    if(ec) return std::nullopt;
+
+    bool directory = fs::is_directory(root, ec);
+    if (ec || !directory) return std::nullopt;
+
+    fs::path file_path = root / requested_path;
+    file_path = fs::canonical(file_path, ec);
+    if(ec) return std::nullopt;
+
+    if (!is_path_prefix(root, file_path)) return std::nullopt;
+
+    bool regular = fs::is_regular_file(file_path, ec);
+    if (ec || !regular) return std::nullopt;
+    
+    return file_path;
+}
